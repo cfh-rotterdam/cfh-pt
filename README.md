@@ -5,7 +5,7 @@ Coach dashboard for CFH personal training: https://cfh-rotterdam.github.io/cfh-p
 Built the same way as [CFH Events](https://github.com/cfh-rotterdam/cfh-events): one `index.html`, no build step, served by GitHub Pages.
 
 - Data lives in Supabase (project `cfh-pt`): tables `clients`, `blocks`, `documents`. Nothing about clients is stored in this repo.
-- Sign-in with an email link. Only emails in `app_users` can read or write (Row Level Security).
+- Sign-in with email + password (set it from the account menu after the first login) or an email link. Only emails in `app_users` can read or write (Row Level Security).
 - Views: Roster (queue, blocks in progress, all clients), Timeline, Documents. Click a client for the profile, edit it, or build the next block.
 - Block builder: preview, save draft, download `.docx`, publish. Upload to Drive turns on when `GOOGLE_CLIENT_ID` is set in `index.html`.
 

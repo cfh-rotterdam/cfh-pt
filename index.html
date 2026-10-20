@@ -160,7 +160,7 @@
   .fchip:hover{color:var(--ink);border-color:var(--line-2)}
   .fchip[aria-pressed=true]{background:var(--ink);color:#0C0C0F;border-color:var(--ink)}
   .fchip[aria-pressed=true] span{color:#55565C}
-  select,input[type=text],input[type=email],input[type=number],input[type=date],textarea{font:inherit;font-family:var(--f);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 13px}
+  select,input[type=text],input[type=email],input[type=password],input[type=number],input[type=date],textarea{font:inherit;font-family:var(--f);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 13px}
   select{cursor:pointer}
   textarea{width:100%;resize:vertical;line-height:1.55}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:inherit;font-family:var(--f);font-weight:700;font-size:13px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:var(--panel-2);color:var(--ink);padding:10px 16px;cursor:pointer}
@@ -349,7 +349,11 @@
   .gate .or{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--ink-3);font-family:var(--f-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase}
   .gate .or::before,.gate .or::after{content:"";flex:1;height:1px;background:var(--line)}
   .gate form{display:flex;flex-direction:column;gap:10px}
-  .gate input[type=email]{width:100%;padding:13px 14px;font-size:14px}
+  .gate input[type=email],.gate input[type=password]{width:100%;padding:13px 14px;font-size:16px}
+  .pwform{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid var(--line)}
+  .pwform input{width:100%;font-size:16px}
+  .pwform p{margin:0;font-size:12px;color:var(--ink-3)}
+  .pwform p.ok{color:var(--ok)} .pwform p.crit{color:var(--crit)}
   .gate .msg{margin:16px 0 0;font-size:13px;color:var(--ink-2)}
   .gate .msg.ok{color:var(--ok)} .gate .msg.crit{color:var(--crit)}
 
@@ -376,10 +380,13 @@
     <h1 id="gateTitle">Sign in</h1>
     <p id="gateText">Only CFH coaches on the access list can open the client roster.</p>
     <div id="gateForms">
-      <form id="gEmail" novalidate>
-        <input type="email" id="gAddr" placeholder="you@example.com" autocomplete="email" aria-label="Email address" required>
-        <button type="submit" class="btn primary">Email me a sign-in link</button>
+      <form id="gPass" novalidate>
+        <input type="email" id="gAddr" placeholder="you@example.com" autocomplete="username" autocapitalize="none" aria-label="Email address" required>
+        <input type="password" id="gPw" placeholder="Password" autocomplete="current-password" aria-label="Password" required>
+        <button type="submit" class="btn primary">Sign in</button>
       </form>
+      <div class="or">or</div>
+      <button type="button" class="btn" id="gLink">Email me a sign-in link</button>
     </div>
     <button type="button" class="btn" id="gOut" hidden>Sign out</button>
     <p class="msg" id="gMsg" role="status"></p>
@@ -400,7 +407,14 @@
       </label>
       <div class="me-wrap">
         <button type="button" class="me" id="me" aria-haspopup="true" aria-expanded="false" title="Account">D</button>
-        <div class="menu" id="meMenu" hidden><p id="meEmail"></p><button type="button" class="btn" id="signOut">Sign out</button></div>
+        <div class="menu" id="meMenu" hidden><p id="meEmail"></p>
+          <form class="pwform" id="pwForm" novalidate>
+            <input type="email" id="pwUser" autocomplete="username" hidden>
+            <input type="password" id="pwNew" placeholder="New password" autocomplete="new-password" aria-label="New password">
+            <button type="submit" class="btn">Set password</button>
+            <p id="pwMsg" role="status">Use it to sign in on your phone.</p>
+          </form>
+          <button type="button" class="btn" id="signOut">Sign out</button></div>
       </div>
     </header>
 
@@ -513,7 +527,7 @@
   var DAY = 86400000, LOC = "en-GB";
   var $ = function(id){ return document.getElementById(id); };
   var sb = null, user = null;
-  try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:"pkce"}}); } catch(e){ sb = null; }
+  try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:"implicit"}}); } catch(e){ sb = null; }
 
   /* today in Amsterdam */
   function amsToday(){ var s = new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Amsterdam"}).format(new Date()); return parseDate(s); }
@@ -1424,29 +1438,56 @@
 
   function enter(session){
     user = session.user;
-    if(/[?&]code=/.test(location.search)){ try { history.replaceState(null, "", location.pathname + location.hash); } catch(e){} }
     sb.rpc("is_app_user").then(function(r){
       if(r.error){ showGate("error"); return; }
       if(!r.data){ showGate("denied", user.email); return; }
       $("gate").hidden = true; $("app").hidden = false;
       $("me").textContent = (user.email || "D")[0].toUpperCase();
       $("meEmail").textContent = "Signed in as " + user.email;
+      $("pwUser").value = user.email || "";
       var h = (location.hash || "").replace("#","");
       setView(["timeline","documents"].indexOf(h) !== -1 ? h : "roster");
       load();
     });
   }
 
-  $("gEmail").addEventListener("submit", function(ev){
-    ev.preventDefault();
+  function gateEmail(){
     var email = $("gAddr").value.trim().toLowerCase();
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ gmsg("Enter a valid email address.", "crit"); return; }
-    gmsg("Sending…");
-    sb.auth.signInWithOtp({email:email, options:{emailRedirectTo:redirectUrl()}}).then(function(r){
-      if(r.error) gmsg(r.error.message || "Could not send the link. Try again in a minute.", "crit");
-      else gmsg("Check " + email + " and open the link on this device.", "ok");
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ gmsg("Enter a valid email address.", "crit"); return ""; }
+    return email;
+  }
+  $("gPass").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var email = gateEmail(); if(!email) return;
+    var pw = $("gPw").value;
+    if(!pw){ gmsg("Enter your password.", "crit"); return; }
+    gmsg("Signing in…");
+    sb.auth.signInWithPassword({email:email, password:pw}).then(function(r){
+      if(!r.error) return;
+      if(/invalid login credentials/i.test(r.error.message || "")) gmsg("Wrong email or password. No password yet? Sign in on your computer and set one from the account menu.", "crit");
+      else gmsg(r.error.message || "Could not sign in. Try again.", "crit");
     });
   });
+  $("gLink").addEventListener("click", function(){
+    var email = gateEmail(); if(!email) return;
+    gmsg("Sending…");
+    sb.auth.signInWithOtp({email:email, options:{emailRedirectTo:redirectUrl(), shouldCreateUser:false}}).then(function(r){
+      if(!r.error){ gmsg("Check " + email + " and open the newest email. The link works once.", "ok"); return; }
+      if(r.error.status === 429 || /rate limit/i.test(r.error.message || "")) gmsg("Too many emails in the last hour. Wait a while, or sign in with your password.", "crit");
+      else gmsg(r.error.message || "Could not send the link. Try again later.", "crit");
+    });
+  });
+  $("pwForm").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var pw = $("pwNew").value, m = $("pwMsg");
+    if(pw.length < 8){ m.textContent = "Use at least 8 characters."; m.className = "crit"; return; }
+    m.textContent = "Saving…"; m.className = "";
+    sb.auth.updateUser({password:pw}).then(function(r){
+      if(r.error){ m.textContent = r.error.message || "Could not save the password."; m.className = "crit"; return; }
+      $("pwNew").value = ""; m.textContent = "Password saved. Sign in with it on your phone."; m.className = "ok";
+    });
+  });
+  $("meMenu").addEventListener("click", function(e){ e.stopPropagation(); });
   function signOut(){ sb.auth.signOut().then(function(){ clients = []; loaded = false; showGate("signin"); }); }
   $("gOut").addEventListener("click", signOut);
   $("signOut").addEventListener("click", signOut);
@@ -1488,8 +1529,13 @@
   sb.auth.getSession().then(function(r){
     var s = r.data && r.data.session;
     if(s){ if(!entered){ entered = true; enter(s); } }
-    else if(!/[?&]code=/.test(location.search)) showGate("signin");
-    else setTimeout(function(){ if(!entered){ showGate("signin"); gmsg("That sign-in link has expired or was opened on another device. Ask for a new one.", "crit"); } }, 5000);
+    else {
+      showGate("signin");
+      if(/error_code=|error_description=/.test(location.hash)){
+        gmsg("That sign-in link was already used or has expired. Sign in with your password, or ask for a new link.", "crit");
+        try { history.replaceState(null, "", location.pathname); } catch(e){}
+      }
+    }
   });
 })();
 </script>
