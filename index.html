@@ -370,8 +370,9 @@
   function blockInfo(c){
     if(c.status === "paused") return {state:"paused", label:"In pausa", days:null};
     var b = c.block;
-    if(!b){
-      if(c.next){ var ns = parseDate(c.next.start); return {state:"upcoming", label:"In arrivo", days:Math.round((ns - today)/DAY), nextStart:ns}; }
+    var ns = c.next ? parseDate(c.next.start) : null;
+    if(!b || (ns && addDays(parseDate(b.start), (Number(b.weeks) || 6)*7) < today)){
+      if(ns) return {state:"upcoming", label:"In arrivo", days:Math.round((ns - today)/DAY), nextStart:ns, n:c.next.n};
       return {state:"todo", label:"Da programmare", days:null};
     }
     var start = parseDate(b.start), weeks = Number(b.weeks) || 6, end = addDays(start, weeks*7);
